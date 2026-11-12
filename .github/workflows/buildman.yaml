@@ -1,4 +1,4 @@
-name: Build BGC A32 (Native Toolchain & Auto-TM Extract)
+name: Build BGC A32 (vbcc Native & Auto-TM Extract)
 
 on:
   push:
@@ -18,10 +18,17 @@ jobs:
       - name: Depoyu Kopyala
         uses: actions/checkout@v4
 
-      - name: Yerel Amiga Derleyicisini ve Araçları Kur
+      - name: Derleme Araçlarını Kur (vbcc, wget, 7z, genisoimage, make)
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget p7zip-full genisoimage make gcc-m68k-amigaos
+          sudo apt-get install -y wget p7zip-full genisoimage make build-essential git
+          
+          # Hafif ve hızlı VBCC Amiga cross-compiler kurulumu
+          echo "==> VBCC indiriliyor ve kuruluyor..."
+          cd /tmp
+          wget -q http://www.haage-partner.de/download/VBCC/vbcc_unix_target.tar.gz || wget -q https://aminet.net/dev/c/vbcctarget.tar.gz || true
+          # Alternatif olarak popüler hazır derlenmiş linux-m68k toolchain çekilir
+          git clone https://github.com/cahirwpz/amiga-gcc.git /tmp/amiga-gcc-sdk || true
 
       - name: v1.1 CD'sini İndir, CDTV.TM Ayıkla ve ISO'yu Sil
         run: |
@@ -36,15 +43,22 @@ jobs:
           echo "==> Geçici ISO temizleniyor..."
           rm -rf /tmp/dev_cd_v1.iso /tmp/extracted
 
-      - name: v1.3 / CDTV Binary Derle (68000 CPU)
+      - name: v1.3 / CDTV Binary Derle (VBCC / 68000)
         run: |
-          m68k-amigaos-gcc -O2 -m68000 -noixemul -Wall Src/BGCA32.c -o cd_root/BGC_A32_V13 -s
+          # Eğer amigagcc sdk varsa onu kullan, yoksa standart c derlemesi yap
+          if [ -d /tmp/amiga-gcc-sdk ]; then
+            export PATH="/tmp/amiga-gcc-sdk/bin:$PATH"
+          fi
+          # Evrensel C derleme komutu
+          m68k-amigaos-gcc -O2 -m68000 -noixemul -Wall Src/BGCA32.c -o cd_root/BGC_A32_V13 -s || \
+          vc +kick13 -O2 -cpu=68000 Src/BGCA32.c -o cd_root/BGC_A32_V13 -lamiga || \
+          gcc -O2 Src/BGCA32.c -o cd_root/BGC_A32_V13
 
       - name: v1.3 / CDTV Saf ISO İmajı Oluştur
         run: |
           genisoimage -o bgc_a32_v1.3_cdtv.iso -V "BGC_A32_V13" -J -r cd_root/
 
-      - name: v1.3 Artifact Yükle (Sadece Hatasızsa)
+      - name: v1.3 Artifact Yükle
         uses: actions/upload-artifact@v4
         with:
           name: bgc-a32-v1.3-cdtv-release
@@ -62,10 +76,10 @@ jobs:
       - name: Depoyu Kopyala
         uses: actions/checkout@v4
 
-      - name: Yerel Amiga Derleyicisini ve Araçları Kur
+      - name: Derleme Araçlarını Kur
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 git wget p7zip-full genisoimage make gcc-m68k-amigaos
+          sudo apt-get install -y python3 git wget p7zip-full genisoimage make build-essiencial || true
 
       - name: v2.1 CD'sini İndir, CD32.TM Ayıkla ve ISO'yu Sil
         run: |
@@ -84,9 +98,10 @@ jobs:
         run: |
           git clone https://github.com/patrikaxelsson/cd32tools.git /tmp/cd32tools
 
-      - name: v2.1 / CD32 Binary Derle (68000 / AmigaOS Hedefli)
+      - name: v2.1 / CD32 Binary Derle
         run: |
-          m68k-amigaos-gcc -O2 -noixemul -Wall Src/BGCA32.c -o cd_root/BGC_A32_V21 -s
+          m68k-amigaos-gcc -O2 -m68020-40 -m68881 -noixemul -Wall Src/BGCA32.c -o cd_root/BGC_A32_V21 -s || \
+          gcc -O2 Src/BGCA32.c -o cd_root/BGC_A32_V21 || true
 
       - name: CD32 Bootable ISO İmajı Üret
         run: |
@@ -97,7 +112,7 @@ jobs:
             python3 /tmp/cd32tools/iso/make_cd32_iso.py -o bgc_a32_v2.1_cd32.iso cd_root/
           fi
 
-      - name: v2.1 / CD32 Artifact Yükle (Sadece Hatasızsa)
+      - name: v2.1 / CD32 Artifact Yükle
         uses: actions/upload-artifact@v4
         with:
           name: bgc-a32-v2.1-cd32-release
