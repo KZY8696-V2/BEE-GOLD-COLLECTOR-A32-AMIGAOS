@@ -1,0 +1,78 @@
+name: Build BGC A32 (Independent Multi-Target)
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-cd32:
+    runs-on: ubuntu-latest
+    container:
+      image: bebbo/amiga-gcc:latest
+    continue-on-error: true # Hata alsa bile diğerlerini etkilemez
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Install Tools
+        run: apt-get update && apt-get install -y genisoimage make
+      - name: Build CD32 Target
+        run: |
+          mkdir -p cd_root/S
+          m68k-amigaos-gcc -O2 -m68020-40 -m68881 -noixemul -Wall src/bgc_a32.c -o cd_root/BGC_A32_CD32 -s
+          cp assets/CD32.TM cd_root/CD32.TM 2>/dev/null || true
+          genisoimage -o bgc_a32_cd32.iso -V "BGC_A32_CD32" -J -r cd_root/
+      - name: Upload CD32 Artifact (Sadece Hatasızsa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bgc-a32-cd32-release
+          path: |
+            bgc_a32_cd32.iso
+            cd_root/BGC_A32_CD32
+
+  build-cdtv:
+    runs-on: ubuntu-latest
+    container:
+      image: bebbo/amiga-gcc:latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Install Tools
+        run: apt-get update && apt-get install -y genisoimage make
+      - name: Build CDTV Target
+        run: |
+          mkdir -p cd_root/S
+          m68k-amigaos-gcc -O2 -m68000 -noixemul -Wall src/bgc_a32.c -o cd_root/BGC_A32_CDTV -s
+          cp assets/CDTV.TM cd_root/CDTV.TM 2>/dev/null || true
+          genisoimage -o bgc_a32_cdtv.iso -V "BGC_A32_CDTV" -J -r cd_root/
+      - name: Upload CDTV Artifact (Sadece Hatasızsa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bgc-a32-cdtv-release
+          path: |
+            bgc_a32_cdtv.iso
+            cd_root/BGC_A32_CDTV
+
+  build-amigaos:
+    runs-on: ubuntu-latest
+    container:
+      image: bebbo/amiga-gcc:latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+      - name: Install Tools
+        run: apt-get update && apt-get install -y make
+      - name: Build AmigaOS / A500 Target
+        run: |
+          mkdir -p cd_root/S
+          m68k-amigaos-gcc -O2 -m68000 -noixemul -Wall src/bgc_a32.c -o cd_root/BGC_A32_OS -s
+      - name: Upload AmigaOS Artifact (Sadece Hatasızsa)
+        uses: actions/upload-artifact@v4
+        with:
+          name: bgc-a32-os-release
+          path: |
+            cd_root/BGC_A32_OS
